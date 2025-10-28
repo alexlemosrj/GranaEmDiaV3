@@ -37,26 +37,47 @@ const App = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+    
     const getSession = async () => {
       try {
         if (isSupabaseConfigured) {
           const { data: { session }, error } = await supabase.auth.getSession();
+          
           if (error) {
             console.error('Erro ao obter sessão:', error);
+            if (isMounted) setLoading(false);
+            return;
           }
-          setSession(session);
-          if (session?.user) {
-            await syncWithSupabase();
+          
+          if (isMounted) {
+            setSession(session);
+          }
+          
+          if (session?.user && isMounted) {
+            try {
+              // Add timeout protection for sync
+              const syncPromise = syncWithSupabase();
+              const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout na sincronização')), 10000)
+              );
+              
+              await Promise.race([syncPromise, timeoutPromise]);
+            } catch (syncError) {
+              console.error('Erro na sincronização:', syncError);
+              // Continue mesmo com erro de sincronização
+            }
           }
         } else {
-          // Modo offline: don't auto-create a session.
-          // Instead, check if user explicitly authenticated in demo mode previously.
+          // Modo offline
           const demoAuth = localStorage.getItem('demoAuth') === 'true';
-          if (demoAuth) {
-            // Create a minimal demo session object
+          if (demoAuth && isMounted) {
             setSession({ user: { id: 'demo-user', email: 'demo@local' } } as any);
-            // syncWithSupabase is safe because the store checks isSupabaseConfigured internally
-            await syncWithSupabase();
+            try {
+              await syncWithSupabase();
+            } catch (syncError) {
+              console.error('Erro na sincronização (modo demo):', syncError);
+            }
           } else {
             console.log('🔧 Modo desenvolvimento ativo — sem sessão automática');
           }
@@ -64,7 +85,9 @@ const App = () => {
       } catch (error) {
         console.error('Erro na inicialização:', error);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -77,13 +100,17 @@ const App = () => {
         async (event, session) => {
           console.log('Auth state changed:', event, session?.user?.email);
           
-          const previousSession = session;
+          if (!isMounted) return;
+          
           setSession(session);
           
           if (event === 'SIGNED_IN' && session?.user) {
             console.log(`Usuário autenticado: ${session.user.id}`);
-            // Verificar se é um novo usuário e sincronizar
-            await syncWithSupabase();
+            try {
+              await syncWithSupabase();
+            } catch (syncError) {
+              console.error('Erro na sincronização após login:', syncError);
+            }
           }
           
           if (event === 'SIGNED_OUT') {
@@ -102,10 +129,17 @@ const App = () => {
 
     // Listen for demo authentication events from Login (offline mode)
     const onDemoAuthenticated = async () => {
+      if (!isMounted) return;
       setSession({ user: { id: 'demo-user', email: 'demo@local' } } as any);
-      await syncWithSupabase();
+      try {
+        await syncWithSupabase();
+      } catch (syncError) {
+        console.error('Erro na sincronização (demo auth):', syncError);
+      }
     };
+    
     const onDemoLogout = () => {
+      if (!isMounted) return;
       localStorage.removeItem('demoAuth');
       setSession(null);
       setCurrentUserId(null);
@@ -116,6 +150,7 @@ const App = () => {
     window.addEventListener('demo-logout', onDemoLogout);
 
     return () => {
+      isMounted = false;
       if (unsubscribe) unsubscribe();
       window.removeEventListener('demo-authenticated', onDemoAuthenticated);
       window.removeEventListener('demo-logout', onDemoLogout);
