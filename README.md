@@ -1,6 +1,17 @@
-# 💰 GranaEmDiaV2 - Controle Financeiro Pessoal
+# 💰 GranaEmDiaV3 - Controle Financeiro Pessoal
 
-Um aplicativo moderno de controle financeiro pessoal construído com React, TypeScript, Tailwind CSS e Supabase.
+> **Versão 3.0.0** - Multi-login corrigido e funcionalidades 100% funcionais
+
+Um aplicativo moderno de controle financeiro pessoal construído com React, TypeScript, Tailwind CSS e Supabase, com suporte completo a múltiplos usuários e sincronização em tempo real.
+
+## 🎉 Novidades da V3
+
+- ✅ **Multi-login 100% funcional** - Dados isolados por usuário
+- ✅ **Detecção automática de mudança de usuário** - Limpa dados automaticamente
+- ✅ **Metas corrigidas** - Depósito rápido e edição funcionando perfeitamente
+- ✅ **Subscriptions otimizadas** - Isoladas por user_id
+- ✅ **Persistência inteligente** - localStorage gerenciado corretamente
+- ✅ **Bugs corrigidos** - Relatorios.tsx e outras correções
 
 ## ✨ Funcionalidades
 
