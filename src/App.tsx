@@ -35,57 +35,72 @@ const App = () => {
   const { syncWithSupabase, clearStore, setCurrentUserId } = useFinanceStore();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
+    let mounted = true;
     
+    // Set a hard timeout to ensure loading never gets stuck
+    const hardTimeout = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn('Hard timeout reached - forcing loading to complete');
+        setLoading(false);
+        setInitialCheckDone(true);
+      }
+    }, 3000); // 3 seconds hard limit
+
     const getSession = async () => {
+      console.log('Starting session check...');
+      
       try {
         if (isSupabaseConfigured) {
+          console.log('Checking Supabase session...');
+          
           const { data: { session }, error } = await supabase.auth.getSession();
           
           if (error) {
-            console.error('Erro ao obter sessão:', error);
-            if (isMounted) setLoading(false);
+            console.error('Error getting session:', error);
+            if (mounted) {
+              setLoading(false);
+              setInitialCheckDone(true);
+            }
             return;
           }
           
-          if (isMounted) {
+          console.log('Session check complete:', session ? 'Session found' : 'No session');
+          
+          if (mounted) {
             setSession(session);
+            setInitialCheckDone(true);
           }
           
-          if (session?.user && isMounted) {
-            try {
-              // Add timeout protection for sync
-              const syncPromise = syncWithSupabase();
-              const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout na sincronização')), 10000)
-              );
-              
-              await Promise.race([syncPromise, timeoutPromise]);
-            } catch (syncError) {
-              console.error('Erro na sincronização:', syncError);
-              // Continue mesmo com erro de sincronização
-            }
+          // Sync in background - don't block loading
+          if (session?.user && mounted) {
+            console.log('Starting background sync...');
+            syncWithSupabase().catch(err => {
+              console.error('Background sync error:', err);
+            });
           }
         } else {
+          console.log('Supabase not configured, checking demo mode...');
           // Modo offline
           const demoAuth = localStorage.getItem('demoAuth') === 'true';
-          if (demoAuth && isMounted) {
+          if (demoAuth && mounted) {
             setSession({ user: { id: 'demo-user', email: 'demo@local' } } as any);
-            try {
-              await syncWithSupabase();
-            } catch (syncError) {
-              console.error('Erro na sincronização (modo demo):', syncError);
-            }
-          } else {
-            console.log('🔧 Modo desenvolvimento ativo — sem sessão automática');
+            syncWithSupabase().catch(err => {
+              console.error('Demo sync error:', err);
+            });
+          }
+          if (mounted) {
+            setInitialCheckDone(true);
           }
         }
       } catch (error) {
-        console.error('Erro na inicialização:', error);
+        console.error('Error in session initialization:', error);
       } finally {
-        if (isMounted) {
+        if (mounted) {
+          console.log('Session check finished, setting loading to false');
           setLoading(false);
         }
       }
@@ -100,27 +115,21 @@ const App = () => {
         async (event, session) => {
           console.log('Auth state changed:', event, session?.user?.email);
           
-          if (!isMounted) return;
+          if (!mounted) return;
           
           setSession(session);
           
           if (event === 'SIGNED_IN' && session?.user) {
-            console.log(`Usuário autenticado: ${session.user.id}`);
-            try {
-              await syncWithSupabase();
-            } catch (syncError) {
-              console.error('Erro na sincronização após login:', syncError);
-            }
+            console.log(`User authenticated: ${session.user.id}`);
+            syncWithSupabase().catch(err => {
+              console.error('Sync error after login:', err);
+            });
           }
           
           if (event === 'SIGNED_OUT') {
-            console.log('Usuário deslogado, limpando dados...');
+            console.log('User signed out, clearing data...');
             setCurrentUserId(null);
             clearStore();
-          }
-          
-          if (event === 'USER_UPDATED' && session?.user) {
-            console.log('Dados do usuário atualizados');
           }
         }
       );
@@ -129,17 +138,15 @@ const App = () => {
 
     // Listen for demo authentication events from Login (offline mode)
     const onDemoAuthenticated = async () => {
-      if (!isMounted) return;
+      if (!mounted) return;
       setSession({ user: { id: 'demo-user', email: 'demo@local' } } as any);
-      try {
-        await syncWithSupabase();
-      } catch (syncError) {
-        console.error('Erro na sincronização (demo auth):', syncError);
-      }
+      syncWithSupabase().catch(err => {
+        console.error('Demo auth sync error:', err);
+      });
     };
     
     const onDemoLogout = () => {
-      if (!isMounted) return;
+      if (!mounted) return;
       localStorage.removeItem('demoAuth');
       setSession(null);
       setCurrentUserId(null);
@@ -150,14 +157,16 @@ const App = () => {
     window.addEventListener('demo-logout', onDemoLogout);
 
     return () => {
-      isMounted = false;
+      mounted = false;
+      clearTimeout(hardTimeout);
       if (unsubscribe) unsubscribe();
       window.removeEventListener('demo-authenticated', onDemoAuthenticated);
       window.removeEventListener('demo-logout', onDemoLogout);
     };
   }, []);
 
-  if (loading) {
+  // Show loading only briefly and only if initial check isn't done
+  if (loading && !initialCheckDone) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-900">
         <div className="text-center">
