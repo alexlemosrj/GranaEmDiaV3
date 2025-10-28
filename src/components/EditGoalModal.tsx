@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Target } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Goal, useFinanceStore } from '../store/useFinanceStore';
+import { toast } from 'react-hot-toast';
 
 interface EditGoalModalProps {
   goal: Goal;
@@ -17,6 +18,7 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, isOpen, onClose }) 
     currentAmount: '',
     deadline: ''
   });
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen && goal) {
@@ -29,28 +31,37 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, isOpen, onClose }) 
     }
   }, [isOpen, goal]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.name || !formData.targetAmount || !formData.deadline) {
+      toast.error('Preencha todos os campos obrigatórios');
       return;
     }
 
-    updateGoal(goal.id, {
-      name: formData.name,
-      targetAmount: parseFloat(formData.targetAmount),
-      currentAmount: parseFloat(formData.currentAmount) || 0,
-      deadline: formData.deadline
-    });
-    
-    onClose();
+    setIsLoading(true);
+    try {
+      await updateGoal(goal.id, {
+        name: formData.name,
+        targetAmount: parseFloat(formData.targetAmount),
+        currentAmount: parseFloat(formData.currentAmount) || 0,
+        deadline: formData.deadline
+      });
+      
+      toast.success('Meta atualizada com sucesso!');
+      onClose();
+    } catch (error) {
+      console.error('Erro ao atualizar meta:', error);
+      toast.error('Erro ao atualizar meta');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -59,7 +70,6 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, isOpen, onClose }) 
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
           />
           
-          {/* Modal */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -70,7 +80,6 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, isOpen, onClose }) 
               boxShadow: '0 25px 50px rgba(0, 0, 0, 0.4), 0 10px 20px rgba(0, 0, 0, 0.3)'
             }}
           >
-            {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-500/20 rounded-full">
@@ -80,15 +89,14 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, isOpen, onClose }) 
               </div>
               <button
                 onClick={onClose}
-                className="p-2 text-gray-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-all duration-200"
+                disabled={isLoading}
+                className="p-2 text-gray-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-all duration-200 disabled:opacity-50"
               >
                 <X size={20} />
               </button>
             </div>
 
-            {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Título da Meta */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Título da Meta
@@ -100,13 +108,13 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, isOpen, onClose }) 
                     value={formData.name}
                     onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="Ex: Viagem para Europa"
-                    className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                    disabled={isLoading}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     required
                   />
                 </div>
               </div>
 
-              {/* Valor da Meta */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Valor da Meta
@@ -120,13 +128,13 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, isOpen, onClose }) 
                     value={formData.targetAmount}
                     onChange={(e) => setFormData(prev => ({ ...prev, targetAmount: e.target.value }))}
                     placeholder="0,00"
-                    className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                    disabled={isLoading}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     required
                   />
                 </div>
               </div>
 
-              {/* Valor Atual */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Valor Atual
@@ -139,13 +147,13 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, isOpen, onClose }) 
                     min="0"
                     value={formData.currentAmount}
                     onChange={(e) => setFormData(prev => ({ ...prev, currentAmount: e.target.value }))}
-                    placeholder="0"
-                    className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                    placeholder="0,00"
+                    disabled={isLoading}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
 
-              {/* Data Limite */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Data Limite
@@ -154,25 +162,27 @@ const EditGoalModal: React.FC<EditGoalModalProps> = ({ goal, isOpen, onClose }) 
                   type="date"
                   value={formData.deadline}
                   onChange={(e) => setFormData(prev => ({ ...prev, deadline: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                  disabled={isLoading}
+                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   required
                 />
               </div>
 
-              {/* Buttons */}
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="flex-1 px-4 py-3 bg-slate-700/50 hover:bg-slate-600/50 text-gray-300 font-medium rounded-lg transition-all duration-200"
+                  disabled={isLoading}
+                  className="flex-1 px-4 py-3 bg-slate-700/50 hover:bg-slate-600/50 text-gray-300 font-medium rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-blue-500/25"
+                  disabled={isLoading}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Salvar Alterações
+                  {isLoading ? 'Salvando...' : 'Salvar Alterações'}
                 </button>
               </div>
             </form>
