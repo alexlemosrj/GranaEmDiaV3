@@ -120,7 +120,7 @@ const App = () => {
       window.removeEventListener('demo-authenticated', onDemoAuthenticated);
       window.removeEventListener('demo-logout', onDemoLogout);
     };
-  }, [syncWithSupabase, clearStore, setCurrentUserId]);
+  }, []);
 
   if (loading) {
     return (
