@@ -432,11 +432,18 @@ export const useFinanceStore = create<FinanceState>()(
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error("Usuário não autenticado");
 
-          const updateData: any = { 
-            ...updatedGoal,
-            updated_at: new Date().toISOString()
-          };
+          // Construir payload com apenas colunas snake_case válidas
+          const updateData: Record<string, any> = {};
 
+          if (updatedGoal.name !== undefined) {
+            updateData.name = updatedGoal.name;
+          }
+          if (updatedGoal.deadline !== undefined) {
+            updateData.deadline = updatedGoal.deadline;
+          }
+          if (updatedGoal.recurring !== undefined) {
+            updateData.recurring = updatedGoal.recurring;
+          }
           if (updatedGoal.targetAmount !== undefined) {
             updateData.target_amount = updatedGoal.targetAmount;
           }
@@ -444,13 +451,20 @@ export const useFinanceStore = create<FinanceState>()(
             updateData.current_amount = updatedGoal.currentAmount;
           }
 
+          console.log('🎯 Atualizando meta:', { id, payload: updateData });
+
           const { error } = await supabase
             .from('goals')
             .update(updateData)
             .eq('id', id)
             .eq('user_id', user.id);
 
-          if (error) throw error;
+          if (error) {
+            console.error('❌ Erro ao atualizar meta no Supabase:', error);
+            throw error;
+          }
+
+          console.log('✅ Meta atualizada com sucesso');
 
           // Recarregar as metas para atualizar a visualização
           await get().loadGoals();
