@@ -418,6 +418,8 @@ export const useFinanceStore = create<FinanceState>()(
       updateGoal: async (id, updatedGoal) => {
         set({ isLoading: true, error: null });
         try {
+          console.log('🎯 updateGoal called with id:', id, 'data:', updatedGoal);
+          
           if (!isSupabaseConfigured) {
             // Offline: update locally
             set((state) => {
@@ -432,17 +434,26 @@ export const useFinanceStore = create<FinanceState>()(
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error("Usuário não autenticado");
 
-          const updateData: any = { 
-            ...updatedGoal,
-            updated_at: new Date().toISOString()
-          };
-
+          // Build payload with only valid snake_case columns
+          const updateData: any = {};
+          
+          if (updatedGoal.name !== undefined) {
+            updateData.name = updatedGoal.name;
+          }
           if (updatedGoal.targetAmount !== undefined) {
             updateData.target_amount = updatedGoal.targetAmount;
           }
           if (updatedGoal.currentAmount !== undefined) {
             updateData.current_amount = updatedGoal.currentAmount;
           }
+          if (updatedGoal.deadline !== undefined) {
+            updateData.deadline = updatedGoal.deadline;
+          }
+          if (updatedGoal.recurring !== undefined) {
+            updateData.recurring = updatedGoal.recurring;
+          }
+
+          console.log('📤 Sending to Supabase (snake_case):', updateData);
 
           const { error } = await supabase
             .from('goals')
@@ -450,7 +461,12 @@ export const useFinanceStore = create<FinanceState>()(
             .eq('id', id)
             .eq('user_id', user.id);
 
-          if (error) throw error;
+          if (error) {
+            console.error('❌ Supabase update error:', error);
+            throw error;
+          }
+
+          console.log('✅ Goal updated successfully, reloading goals...');
 
           // Recarregar as metas para atualizar a visualização
           await get().loadGoals();
