@@ -184,6 +184,7 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
+        <GoalToastProvider />
         <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -197,7 +198,6 @@ const App = () => {
               }
             }}
           />
-          <GoalToastProvider />
           <BrowserRouter>
             <Routes>
               {/* Login route - accessible whether logged in or not */}
