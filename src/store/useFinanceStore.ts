@@ -6,99 +6,7 @@ export interface Transaction {
   id: string;
   description: string;
   amount: number;
-  category: 'Moradia' | 'Mercado' | 'Outros' | 'Freelance';  import { useEffect } from 'react';
-  
-  interface ToastEvent extends CustomEvent {
-    detail: {
-      success: boolean;
-      message: string;
-    };
-  }
-  
-  export function useGoalToast() {
-    useEffect(() => {
-      const handleGoalUpdate = (event: Event) => {
-        const customEvent = event as ToastEvent;
-        const { success, message } = customEvent.detail;
-  
-        // Criar elemento de toast
-        const toast = document.createElement('div');
-        toast.style.cssText = `
-          position: fixed;
-          bottom: 20px;
-          right: 20px;
-          padding: 16px 24px;
-          border-radius: 8px;
-          font-weight: 500;
-          font-size: 14px;
-          z-index: 9999;
-          animation: slideIn 0.3s ease-out;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-          max-width: 400px;
-          word-wrap: break-word;
-        `;
-  
-        if (success) {
-          toast.style.backgroundColor = '#10b981';
-          toast.style.color = '#ffffff';
-        } else {
-          toast.style.backgroundColor = '#ef4444';
-          toast.style.color = '#ffffff';
-        }
-  
-        toast.textContent = message;
-  
-        // Adicionar animação
-        const style = document.createElement('style');
-        style.textContent = `
-          @keyframes slideIn {
-            from {
-              transform: translateX(400px);
-              opacity: 0;
-            }
-            to {
-              transform: translateX(0);
-              opacity: 1;
-            }
-          }
-          @keyframes slideOut {
-            from {
-              transform: translateX(0);
-              opacity: 1;
-            }
-            to {
-              transform: translateX(400px);
-              opacity: 0;
-            }
-          }
-        `;
-        if (!document.head.querySelector('style[data-toast-animation]')) {
-          style.setAttribute('data-toast-animation', 'true');
-          document.head.appendChild(style);
-        }
-  
-        document.body.appendChild(toast);
-  
-        // Remover após 3 segundos
-        setTimeout(() => {
-          toast.style.animation = 'slideOut 0.3s ease-out forwards';
-          setTimeout(() => {
-            document.body.removeChild(toast);
-          }, 300);
-        }, 3000);
-      };
-  
-      window.addEventListener('goalUpdated', handleGoalUpdate);
-      return () => {
-        window.removeEventListener('goalUpdated', handleGoalUpdate);
-      };
-    }, []);
-  }  import { useGoalToast } from '@/hooks/useGoalToast';
-  
-  export function GoalToastProvider() {
-    useGoalToast();
-    return null;
-  }
+  category: 'Moradia' | 'Mercado' | 'Outros' | 'Freelance';
   type: 'income' | 'expense';
   date: string;
 }
@@ -154,7 +62,6 @@ export interface FinanceState {
   setCurrentUserId: (userId: string | null) => void;
 }
 
-// Mock data for offline mode
 const mockTransactions: Transaction[] = [
   { id: '1', description: 'Compra no Mercado', amount: -130, category: 'Mercado', type: 'expense', date: '2025-10-10' },
   { id: '2', description: 'Freelance', amount: 500, category: 'Freelance', type: 'income', date: '2025-10-10' },
@@ -220,14 +127,12 @@ const initialState = {
 
 let subscriptions: any[] = [];
 
-// Check if Supabase is configured
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const isSupabaseConfigured = SUPABASE_URL && SUPABASE_ANON_KEY && 
                              SUPABASE_URL.includes('supabase.co') && 
                              SUPABASE_ANON_KEY.length > 50;
 
-// Helper: generate a simple unique id for offline items
 function genId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 }
@@ -240,7 +145,6 @@ export const useFinanceStore = create<FinanceState>()(
       setCurrentUserId: (userId: string | null) => {
         const currentUserId = get().currentUserId;
         
-        // Se o usuário mudou, limpar os dados do usuário anterior
         if (currentUserId && userId && currentUserId !== userId) {
           console.log('Mudança de usuário detectada, limpando dados do usuário anterior...');
           get().cleanupSubscriptions();
@@ -259,87 +163,56 @@ export const useFinanceStore = create<FinanceState>()(
       },
 
       setupRealtimeSubscriptions: () => {
-        if (!isSupabaseConfigured) {
-          // No subscriptions in offline/dev mode
-          return;
-        }
+        if (!isSupabaseConfigured) return;
 
         const setupSubscriptions = async () => {
           const { data: { user } } = await supabase.auth.getUser();
-          if (!user) {
-            console.log('Nenhum usuário autenticado, não configurando subscriptions.');
-            return;
-          }
+          if (!user) return;
 
-          // Limpar subscriptions existentes ANTES de criar novas
-          console.log('Limpando subscriptions antigas...');
           get().cleanupSubscriptions();
 
-          console.log(`Criando novas subscriptions para usuário: ${user.id}`);
-
-          // Subscription para transações
           const transactionsSubscription = supabase
             .channel(`transactions-${user.id}`)
             .on('postgres_changes', 
               { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${user.id}` },
-              (payload) => {
-                console.log('Mudança em transações detectada:', payload);
-                get().loadTransactions();
-              }
+              () => get().loadTransactions()
             )
             .subscribe();
 
-          // Subscription para metas
           const goalsSubscription = supabase
             .channel(`goals-${user.id}`)
             .on('postgres_changes', 
               { event: '*', schema: 'public', table: 'goals', filter: `user_id=eq.${user.id}` },
-              (payload) => {
-                console.log('Mudança em metas detectada:', payload);
-                get().loadGoals();
-              }
+              () => get().loadGoals()
             )
             .subscribe();
 
-          // Subscription para eventos
           const eventsSubscription = supabase
             .channel(`events-${user.id}`)
             .on('postgres_changes', 
               { event: '*', schema: 'public', table: 'events', filter: `user_id=eq.${user.id}` },
-              (payload) => {
-                console.log('Mudança em eventos detectada:', payload);
-                get().loadEvents();
-              }
+              () => get().loadEvents()
             )
             .subscribe();
 
           subscriptions = [transactionsSubscription, goalsSubscription, eventsSubscription];
-          console.log(`${subscriptions.length} subscriptions criadas com sucesso.`);
         };
 
         setupSubscriptions();
       },
 
       cleanupSubscriptions: () => {
-        if (subscriptions.length > 0) {
-          console.log(`Limpando ${subscriptions.length} subscription(s)...`);
-          subscriptions.forEach(subscription => {
-            supabase.removeChannel(subscription);
-          });
-          subscriptions = [];
-          console.log('Subscriptions limpas com sucesso.');
-        }
+        subscriptions.forEach(subscription => {
+          supabase.removeChannel(subscription);
+        });
+        subscriptions = [];
       },
 
       addTransaction: async (transaction) => {
         set({ isLoading: true, error: null });
         try {
           if (!isSupabaseConfigured) {
-            // Offline: add locally
-            const newTx: Transaction = {
-              id: genId(),
-              ...transaction
-            };
+            const newTx: Transaction = { id: genId(), ...transaction };
             set((state) => ({
               transactions: [newTx, ...state.transactions],
               balance: state.balance + transaction.amount,
@@ -351,25 +224,18 @@ export const useFinanceStore = create<FinanceState>()(
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error("Usuário não autenticado");
 
-          const { data, error } = await supabase
+          await supabase
             .from('transactions')
             .insert({ 
               ...transaction, 
               user_id: user.id,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
+            });
 
-          if (error) throw error;
-
-          // Recalcular estatísticas mensais
           get().calculateMonthlyStats();
-
         } catch (error: any) {
-          console.error('Erro ao adicionar transação:', error);
-          set({ isLoading: false, error: error.message || 'Falha ao adicionar transação.' });
+          set({ error: error.message || 'Falha ao adicionar transação.' });
         } finally {
           set({ isLoading: false });
         }
@@ -379,16 +245,14 @@ export const useFinanceStore = create<FinanceState>()(
         set({ isLoading: true, error: null });
         try {
           if (!isSupabaseConfigured) {
-            // Offline: update locally and adjust balance
             set((state) => {
               const prev = state.transactions.find(t => t.id === id);
               const transactions = state.transactions.map((t) => 
                 t.id === id ? { ...t, ...updatedTransaction } : t
               );
               let balance = state.balance;
-              if (prev) {
-                const newAmount = updatedTransaction.amount !== undefined ? updatedTransaction.amount : prev.amount;
-                balance = state.balance - prev.amount + newAmount;
+              if (prev && updatedTransaction.amount !== undefined) {
+                balance = state.balance - prev.amount + updatedTransaction.amount;
               }
               return { transactions, balance };
             });
@@ -399,7 +263,7 @@ export const useFinanceStore = create<FinanceState>()(
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error("Usuário não autenticado");
 
-          const { error } = await supabase
+          await supabase
             .from('transactions')
             .update({ 
               ...updatedTransaction,
@@ -408,13 +272,9 @@ export const useFinanceStore = create<FinanceState>()(
             .eq('id', id)
             .eq('user_id', user.id);
 
-          if (error) throw error;
-
           get().calculateMonthlyStats();
-
         } catch (error: any) {
-          console.error('Erro ao atualizar transação:', error);
-          set({ isLoading: false, error: error.message || 'Falha ao atualizar transação.' });
+          set({ error: error.message || 'Falha ao atualizar transação.' });
         } finally {
           set({ isLoading: false });
         }
@@ -424,12 +284,12 @@ export const useFinanceStore = create<FinanceState>()(
         set({ isLoading: true, error: null });
         try {
           if (!isSupabaseConfigured) {
-            // Offline: delete locally and adjust balance
             set((state) => {
               const txn = state.transactions.find(t => t.id === id);
-              const transactions = state.transactions.filter((t) => t.id !== id);
-              const balance = txn ? state.balance - txn.amount : state.balance;
-              return { transactions, balance };
+              return {
+                transactions: state.transactions.filter((t) => t.id !== id),
+                balance: txn ? state.balance - txn.amount : state.balance,
+              };
             });
             get().calculateMonthlyStats();
             return;
@@ -438,19 +298,15 @@ export const useFinanceStore = create<FinanceState>()(
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error("Usuário não autenticado");
 
-          const { error } = await supabase
+          await supabase
             .from('transactions')
             .delete()
             .eq('id', id)
             .eq('user_id', user.id);
 
-          if (error) throw error;
-
           get().calculateMonthlyStats();
-
         } catch (error: any) {
-          console.error('Erro ao deletar transação:', error);
-          set({ isLoading: false, error: error.message || 'Falha ao deletar transação.' });
+          set({ error: error.message || 'Falha ao deletar transação.' });
         } finally {
           set({ isLoading: false });
         }
@@ -460,48 +316,41 @@ export const useFinanceStore = create<FinanceState>()(
         set({ isLoading: true, error: null });
         try {
           if (!isSupabaseConfigured) {
-            // Offline: add locally
-            const newGoal: Goal = { id: genId(), ...goal };
-            set((state) => ({ goals: [newGoal, ...state.goals] }));
+            set((state) => ({ goals: [{ id: genId(), ...goal }, ...state.goals] }));
             return;
           }
 
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error("Usuário não autenticado");
 
-          const goalDataForSupabase = {
-            user_id: user.id,
-            name: goal.name,
-            target_amount: goal.targetAmount,
-            current_amount: goal.currentAmount,
-            deadline: goal.deadline,
-            recurring: goal.recurring,
-          };
-
           const { data: newGoal, error } = await supabase
             .from('goals')
-            .insert(goalDataForSupabase)
+            .insert({
+              user_id: user.id,
+              name: goal.name,
+              target_amount: goal.targetAmount,
+              current_amount: goal.currentAmount,
+              deadline: goal.deadline,
+              recurring: goal.recurring,
+            })
             .select()
             .single();
 
           if (error) throw error;
-          if (!newGoal) throw new Error("Falha ao obter a meta criada.");
 
-          // Recarregar metas para atualizar a UI
           await get().loadGoals();
 
-          // Criar evento correspondente na agenda
-          await get().addEvent({
-            date: newGoal.deadline,
-            title: `Prazo final: ${newGoal.name}`,
-            description: `Data limite para a meta \"${newGoal.name}\".`,
-            type: 'goal',
-            time: '09:00' // Horário padrão para eventos de meta
-          });
-
+          if (newGoal) {
+            await get().addEvent({
+              date: newGoal.deadline,
+              title: `Prazo final: ${newGoal.name}`,
+              description: `Data limite para a meta "${newGoal.name}".`,
+              type: 'goal',
+              time: '09:00'
+            });
+          }
         } catch (error: any) {
-          console.error('Erro ao adicionar meta:', error);
-          set({ isLoading: false, error: error.message || 'Falha ao adicionar meta.' });
+          set({ error: error.message || 'Falha ao adicionar meta.' });
         } finally {
           set({ isLoading: false });
         }
@@ -511,14 +360,11 @@ export const useFinanceStore = create<FinanceState>()(
         set({ isLoading: true, error: null });
         try {
           if (!isSupabaseConfigured) {
-            // Offline: update locally
-            set((state) => {
-              const goals = state.goals.map((g) => 
+            set((state) => ({
+              goals: state.goals.map((g) => 
                 g.id === id ? { ...g, ...updatedGoal } : g
-              );
-              return { goals };
-            });
-            // Disparar evento de sucesso offline
+              ),
+            }));
             window.dispatchEvent(new CustomEvent('goalUpdated', { 
               detail: { success: true, message: 'Meta atualizada com sucesso!' } 
             }));
@@ -528,26 +374,13 @@ export const useFinanceStore = create<FinanceState>()(
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error("Usuário não autenticado");
 
-          const updateData: any = { 
-            updated_at: new Date().toISOString()
-          };
+          const updateData: any = { updated_at: new Date().toISOString() };
 
-          // Mapear todos os campos corretamente
-          if (updatedGoal.name !== undefined) {
-            updateData.name = updatedGoal.name;
-          }
-          if (updatedGoal.targetAmount !== undefined) {
-            updateData.target_amount = updatedGoal.targetAmount;
-          }
-          if (updatedGoal.currentAmount !== undefined) {
-            updateData.current_amount = updatedGoal.currentAmount;
-          }
-          if (updatedGoal.deadline !== undefined) {
-            updateData.deadline = updatedGoal.deadline;
-          }
-          if (updatedGoal.recurring !== undefined) {
-            updateData.recurring = updatedGoal.recurring;
-          }
+          if (updatedGoal.name !== undefined) updateData.name = updatedGoal.name;
+          if (updatedGoal.targetAmount !== undefined) updateData.target_amount = updatedGoal.targetAmount;
+          if (updatedGoal.currentAmount !== undefined) updateData.current_amount = updatedGoal.currentAmount;
+          if (updatedGoal.deadline !== undefined) updateData.deadline = updatedGoal.deadline;
+          if (updatedGoal.recurring !== undefined) updateData.recurring = updatedGoal.recurring;
 
           const { error } = await supabase
             .from('goals')
@@ -557,27 +390,20 @@ export const useFinanceStore = create<FinanceState>()(
 
           if (error) throw error;
 
-          // ✅ Liberar UI imediatamente
           set({ isLoading: false, error: null });
-          
-          // ✅ Recarregar dados em background
           await get().loadGoals();
 
-          // ✅ Disparar evento de sucesso
           window.dispatchEvent(new CustomEvent('goalUpdated', { 
             detail: { success: true, message: 'Meta atualizada com sucesso! ✅' } 
           }));
 
         } catch (error: any) {
-          console.error('Erro ao atualizar meta:', error);
           const errorMsg = error.message || 'Falha ao atualizar meta.';
           set({ isLoading: false, error: errorMsg });
           
-          // ✅ Disparar evento de erro
           window.dispatchEvent(new CustomEvent('goalUpdated', { 
             detail: { success: false, message: `Erro: ${errorMsg}` } 
           }));
-          
           throw error;
         }
       },
@@ -586,7 +412,6 @@ export const useFinanceStore = create<FinanceState>()(
         set({ isLoading: true, error: null });
         try {
           if (!isSupabaseConfigured) {
-            // Offline: remove locally
             set((state) => ({ goals: state.goals.filter((g) => g.id !== id) }));
             window.dispatchEvent(new CustomEvent('goalUpdated', { 
               detail: { success: true, message: 'Meta cancelada com sucesso!' } 
@@ -605,27 +430,20 @@ export const useFinanceStore = create<FinanceState>()(
 
           if (error) throw error;
 
-          // ✅ Liberar UI imediatamente
           set({ isLoading: false, error: null });
-
-          // ✅ Recarregar as metas para atualizar a visualização
           await get().loadGoals();
 
-          // ✅ Disparar evento de sucesso
           window.dispatchEvent(new CustomEvent('goalUpdated', { 
             detail: { success: true, message: 'Meta cancelada com sucesso! 🗑️' } 
           }));
 
         } catch (error: any) {
-          console.error('Erro ao deletar meta:', error);
           const errorMsg = error.message || 'Falha ao deletar meta.';
           set({ isLoading: false, error: errorMsg });
           
-          // ✅ Disparar evento de erro
           window.dispatchEvent(new CustomEvent('goalUpdated', { 
             detail: { success: false, message: `Erro ao cancelar: ${errorMsg}` } 
           }));
-          
           throw error;
         }
       },
@@ -634,27 +452,20 @@ export const useFinanceStore = create<FinanceState>()(
         set({ isLoading: true, error: null });
         try {
           if (!isSupabaseConfigured) {
-            // Offline: add locally
-            const newEvent: Event = { id: genId(), ...event };
-            set((state) => ({ events: [newEvent, ...state.events] }));
+            set((state) => ({ events: [{ id: genId(), ...event }, ...state.events] }));
             return;
           }
 
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error("Usuário não autenticado");
 
-          const { error } = await supabase
+          await supabase
             .from('events')
             .insert({ ...event, user_id: user.id });
 
-          if (error) throw error;
-
-          // Fetch events again to update the state
           await get().loadEvents();
-
         } catch (error: any) {
-          console.error('Erro ao adicionar evento:', error);
-          set({ isLoading: false, error: error.message || 'Falha ao adicionar evento.' });
+          set({ error: error.message || 'Falha ao adicionar evento.' });
         } finally {
           set({ isLoading: false });
         }
@@ -664,31 +475,22 @@ export const useFinanceStore = create<FinanceState>()(
         set({ isLoading: true, error: null });
         try {
           if (!isSupabaseConfigured) {
-            // Offline: update locally
-            set((state) => {
-              const events = state.events.map((e) => e.id === id ? { ...e, ...updatedEvent } : e);
-              return { events };
-            });
+            set((state) => ({
+              events: state.events.map((e) => e.id === id ? { ...e, ...updatedEvent } : e),
+            }));
             return;
           }
 
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error("Usuário não autenticado");
 
-          const { error } = await supabase
+          await supabase
             .from('events')
-            .update({ 
-              ...updatedEvent,
-              updated_at: new Date().toISOString()
-            })
+            .update({ ...updatedEvent, updated_at: new Date().toISOString() })
             .eq('id', id)
             .eq('user_id', user.id);
-
-          if (error) throw error;
-
         } catch (error: any) {
-          console.error('Erro ao atualizar evento:', error);
-          set({ isLoading: false, error: error.message || 'Falha ao atualizar evento.' });
+          set({ error: error.message || 'Falha ao atualizar evento.' });
         } finally {
           set({ isLoading: false });
         }
@@ -698,7 +500,6 @@ export const useFinanceStore = create<FinanceState>()(
         set({ isLoading: true, error: null });
         try {
           if (!isSupabaseConfigured) {
-            // Offline: delete locally
             set((state) => ({ events: state.events.filter((e) => e.id !== id) }));
             return;
           }
@@ -706,17 +507,13 @@ export const useFinanceStore = create<FinanceState>()(
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error("Usuário não autenticado");
 
-          const { error } = await supabase
+          await supabase
             .from('events')
             .delete()
             .eq('id', id)
             .eq('user_id', user.id);
-
-          if (error) throw error;
-
         } catch (error: any) {
-          console.error('Erro ao deletar evento:', error);
-          set({ isLoading: false, error: error.message || 'Falha ao deletar evento.' });
+          set({ error: error.message || 'Falha ao deletar evento.' });
         } finally {
           set({ isLoading: false });
         }
@@ -726,7 +523,6 @@ export const useFinanceStore = create<FinanceState>()(
         set({ isLoading: true, error: null });
         try {
           if (!isSupabaseConfigured) {
-            // Offline: use persisted or mock transactions
             const transactions = get().transactions.length ? get().transactions : mockTransactions;
             const balance = transactions.reduce((sum, t) => sum + t.amount, 0);
             set({ transactions, balance, isLoading: false });
@@ -758,20 +554,10 @@ export const useFinanceStore = create<FinanceState>()(
           }));
 
           const balance = transactions.reduce((sum, t) => sum + t.amount, 0);
-          
-          set({ 
-            transactions, 
-            balance, 
-            isLoading: false 
-          });
-
+          set({ transactions, balance, isLoading: false });
           get().calculateMonthlyStats();
-
         } catch (error: any) {
-          console.error('Erro ao carregar transações:', error);
-          set({ isLoading: false, error: error.message || 'Erro ao carregar dados do servidor.' });
-        } finally {
-          set({ isLoading: false });
+          set({ isLoading: false, error: error.message || 'Erro ao carregar transações.' });
         }
       },
 
@@ -808,12 +594,8 @@ export const useFinanceStore = create<FinanceState>()(
           }));
 
           set({ goals, isLoading: false });
-
         } catch (error: any) {
-          console.error('Erro ao carregar metas:', error);
-          set({ isLoading: false, error: error.message || 'Erro ao carregar dados do servidor.' });
-        } finally {
-          set({ isLoading: false });
+          set({ isLoading: false, error: error.message || 'Erro ao carregar metas.' });
         }
       },
 
@@ -836,8 +618,7 @@ export const useFinanceStore = create<FinanceState>()(
             .from('events')
             .select('*')
             .eq('user_id', user.id)
-            .order('date', { ascending: false })
-            .order('time', { ascending: false });
+            .order('date', { ascending: false });
 
           if (error) throw error;
 
@@ -852,12 +633,8 @@ export const useFinanceStore = create<FinanceState>()(
           }));
 
           set({ events, isLoading: false });
-
         } catch (error: any) {
-          console.error('Erro ao carregar eventos:', error);
-          set({ isLoading: false, error: error.message || 'Erro ao carregar dados do servidor.' });
-        } finally {
-          set({ isLoading: false });
+          set({ isLoading: false, error: error.message || 'Erro ao carregar eventos.' });
         }
       },
 
@@ -885,44 +662,23 @@ export const useFinanceStore = create<FinanceState>()(
 
       syncWithSupabase: async () => {
         const { loadTransactions, loadGoals, loadEvents, setupRealtimeSubscriptions, setCurrentUserId } = get();
-        console.log("Iniciando sincronização com Supabase...");
         
-        // Obter usuário atual e configurar userId
         if (isSupabaseConfigured) {
           const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            console.log(`Sincronizando dados do usuário: ${user.id}`);
-            setCurrentUserId(user.id);
-          } else {
-            console.log("Nenhum usuário autenticado para sincronizar.");
-            return;
-          }
+          setCurrentUserId(user?.id || null);
         } else {
-          // Modo demo
           setCurrentUserId('demo-user');
         }
         
-        console.log("Carregando transações...");
         await loadTransactions();
-        console.log("Transações carregadas.");
-        
-        console.log("Carregando metas...");
         await loadGoals();
-        console.log("Metas carregadas.");
-        
-        console.log("Carregando eventos...");
         await loadEvents();
-        console.log("Eventos carregados.");
-        
-        console.log("Configurando subscriptions...");
         setupRealtimeSubscriptions();
-        console.log("Sincronização com Supabase concluída.");
       }
     }),
     {
       name: 'finance-storage',
       partialize: (state) => ({
-        // Armazenar apenas os dados essenciais, associados ao usuário
         transactions: state.transactions,
         goals: state.goals,
         events: state.events,
@@ -931,21 +687,15 @@ export const useFinanceStore = create<FinanceState>()(
         monthlyExpenses: state.monthlyExpenses,
         currentUserId: state.currentUserId,
       }),
-      // Usar merge personalizado para evitar conflitos entre usuários
       merge: (persistedState: any, currentState) => {
-        // Se houver um usuário persistido e ele for diferente do atual, ignorar dados persistidos
         const storedUserId = persistedState?.currentUserId;
         const currentUserId = currentState.currentUserId;
         
         if (storedUserId && currentUserId && storedUserId !== currentUserId) {
-          console.log('Usuário diferente detectado no storage, usando estado limpo.');
           return currentState;
         }
         
-        return {
-          ...currentState,
-          ...persistedState,
-        };
+        return { ...currentState, ...persistedState };
       },
     }
   )
