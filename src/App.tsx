@@ -18,6 +18,7 @@ import VoiceAgent from "./pages/VoiceAgent";
 import Login from "./pages/Login";
 import { useFinanceStore } from "./store/useFinanceStore";
 import { supabase } from "./lib/supabase";
+import { GoalToastProvider } from '@/components/GoalToastProvider';
 
 const queryClient = new QueryClient();
 
@@ -196,6 +197,7 @@ const App = () => {
               }
             }}
           />
+          <GoalToastProvider />
           <BrowserRouter>
             <Routes>
               {/* Login route - accessible whether logged in or not */}

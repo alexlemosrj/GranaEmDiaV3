@@ -6,7 +6,99 @@ export interface Transaction {
   id: string;
   description: string;
   amount: number;
-  category: 'Moradia' | 'Mercado' | 'Outros' | 'Freelance';
+  category: 'Moradia' | 'Mercado' | 'Outros' | 'Freelance';  import { useEffect } from 'react';
+  
+  interface ToastEvent extends CustomEvent {
+    detail: {
+      success: boolean;
+      message: string;
+    };
+  }
+  
+  export function useGoalToast() {
+    useEffect(() => {
+      const handleGoalUpdate = (event: Event) => {
+        const customEvent = event as ToastEvent;
+        const { success, message } = customEvent.detail;
+  
+        // Criar elemento de toast
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+          position: fixed;
+          bottom: 20px;
+          right: 20px;
+          padding: 16px 24px;
+          border-radius: 8px;
+          font-weight: 500;
+          font-size: 14px;
+          z-index: 9999;
+          animation: slideIn 0.3s ease-out;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          max-width: 400px;
+          word-wrap: break-word;
+        `;
+  
+        if (success) {
+          toast.style.backgroundColor = '#10b981';
+          toast.style.color = '#ffffff';
+        } else {
+          toast.style.backgroundColor = '#ef4444';
+          toast.style.color = '#ffffff';
+        }
+  
+        toast.textContent = message;
+  
+        // Adicionar animação
+        const style = document.createElement('style');
+        style.textContent = `
+          @keyframes slideIn {
+            from {
+              transform: translateX(400px);
+              opacity: 0;
+            }
+            to {
+              transform: translateX(0);
+              opacity: 1;
+            }
+          }
+          @keyframes slideOut {
+            from {
+              transform: translateX(0);
+              opacity: 1;
+            }
+            to {
+              transform: translateX(400px);
+              opacity: 0;
+            }
+          }
+        `;
+        if (!document.head.querySelector('style[data-toast-animation]')) {
+          style.setAttribute('data-toast-animation', 'true');
+          document.head.appendChild(style);
+        }
+  
+        document.body.appendChild(toast);
+  
+        // Remover após 3 segundos
+        setTimeout(() => {
+          toast.style.animation = 'slideOut 0.3s ease-out forwards';
+          setTimeout(() => {
+            document.body.removeChild(toast);
+          }, 300);
+        }, 3000);
+      };
+  
+      window.addEventListener('goalUpdated', handleGoalUpdate);
+      return () => {
+        window.removeEventListener('goalUpdated', handleGoalUpdate);
+      };
+    }, []);
+  }  import { useGoalToast } from '@/hooks/useGoalToast';
+  
+  export function GoalToastProvider() {
+    useGoalToast();
+    return null;
+  }
   type: 'income' | 'expense';
   date: string;
 }
@@ -426,6 +518,10 @@ export const useFinanceStore = create<FinanceState>()(
               );
               return { goals };
             });
+            // Disparar evento de sucesso offline
+            window.dispatchEvent(new CustomEvent('goalUpdated', { 
+              detail: { success: true, message: 'Meta atualizada com sucesso!' } 
+            }));
             return;
           }
 
@@ -433,15 +529,24 @@ export const useFinanceStore = create<FinanceState>()(
           if (!user) throw new Error("Usuário não autenticado");
 
           const updateData: any = { 
-            ...updatedGoal,
             updated_at: new Date().toISOString()
           };
 
+          // Mapear todos os campos corretamente
+          if (updatedGoal.name !== undefined) {
+            updateData.name = updatedGoal.name;
+          }
           if (updatedGoal.targetAmount !== undefined) {
             updateData.target_amount = updatedGoal.targetAmount;
           }
           if (updatedGoal.currentAmount !== undefined) {
             updateData.current_amount = updatedGoal.currentAmount;
+          }
+          if (updatedGoal.deadline !== undefined) {
+            updateData.deadline = updatedGoal.deadline;
+          }
+          if (updatedGoal.recurring !== undefined) {
+            updateData.recurring = updatedGoal.recurring;
           }
 
           const { error } = await supabase
@@ -452,14 +557,28 @@ export const useFinanceStore = create<FinanceState>()(
 
           if (error) throw error;
 
-          // Recarregar as metas para atualizar a visualização
+          // ✅ Liberar UI imediatamente
+          set({ isLoading: false, error: null });
+          
+          // ✅ Recarregar dados em background
           await get().loadGoals();
+
+          // ✅ Disparar evento de sucesso
+          window.dispatchEvent(new CustomEvent('goalUpdated', { 
+            detail: { success: true, message: 'Meta atualizada com sucesso! ✅' } 
+          }));
 
         } catch (error: any) {
           console.error('Erro ao atualizar meta:', error);
-          set({ isLoading: false, error: error.message || 'Falha ao atualizar meta.' });
-        } finally {
-          set({ isLoading: false });
+          const errorMsg = error.message || 'Falha ao atualizar meta.';
+          set({ isLoading: false, error: errorMsg });
+          
+          // ✅ Disparar evento de erro
+          window.dispatchEvent(new CustomEvent('goalUpdated', { 
+            detail: { success: false, message: `Erro: ${errorMsg}` } 
+          }));
+          
+          throw error;
         }
       },
       
@@ -469,6 +588,9 @@ export const useFinanceStore = create<FinanceState>()(
           if (!isSupabaseConfigured) {
             // Offline: remove locally
             set((state) => ({ goals: state.goals.filter((g) => g.id !== id) }));
+            window.dispatchEvent(new CustomEvent('goalUpdated', { 
+              detail: { success: true, message: 'Meta cancelada com sucesso!' } 
+            }));
             return;
           }
 
@@ -483,14 +605,28 @@ export const useFinanceStore = create<FinanceState>()(
 
           if (error) throw error;
 
-          // Recarregar as metas para atualizar a visualização
+          // ✅ Liberar UI imediatamente
+          set({ isLoading: false, error: null });
+
+          // ✅ Recarregar as metas para atualizar a visualização
           await get().loadGoals();
+
+          // ✅ Disparar evento de sucesso
+          window.dispatchEvent(new CustomEvent('goalUpdated', { 
+            detail: { success: true, message: 'Meta cancelada com sucesso! 🗑️' } 
+          }));
 
         } catch (error: any) {
           console.error('Erro ao deletar meta:', error);
-          set({ isLoading: false, error: error.message || 'Falha ao deletar meta.' });
-        } finally {
-          set({ isLoading: false });
+          const errorMsg = error.message || 'Falha ao deletar meta.';
+          set({ isLoading: false, error: errorMsg });
+          
+          // ✅ Disparar evento de erro
+          window.dispatchEvent(new CustomEvent('goalUpdated', { 
+            detail: { success: false, message: `Erro ao cancelar: ${errorMsg}` } 
+          }));
+          
+          throw error;
         }
       },
 
