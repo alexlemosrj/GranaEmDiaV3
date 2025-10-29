@@ -432,17 +432,27 @@ export const useFinanceStore = create<FinanceState>()(
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error("Usuário não autenticado");
 
-          const updateData: any = { 
-            ...updatedGoal,
-            updated_at: new Date().toISOString()
-          };
-
+          // 🔧 Build payload with ONLY valid snake_case columns from schema
+          // Schema columns: name, deadline, recurring, target_amount, current_amount
+          const updateData: any = {};
+          
+          if (updatedGoal.name !== undefined) {
+            updateData.name = updatedGoal.name;
+          }
+          if (updatedGoal.deadline !== undefined) {
+            updateData.deadline = updatedGoal.deadline;
+          }
+          if (updatedGoal.recurring !== undefined) {
+            updateData.recurring = updatedGoal.recurring;
+          }
           if (updatedGoal.targetAmount !== undefined) {
             updateData.target_amount = updatedGoal.targetAmount;
           }
           if (updatedGoal.currentAmount !== undefined) {
             updateData.current_amount = updatedGoal.currentAmount;
           }
+
+          console.log('🎯 Atualizando meta - Payload snake_case:', updateData);
 
           const { error } = await supabase
             .from('goals')
@@ -452,11 +462,13 @@ export const useFinanceStore = create<FinanceState>()(
 
           if (error) throw error;
 
+          console.log('✅ Meta atualizada com sucesso no Supabase');
+
           // Recarregar as metas para atualizar a visualização
           await get().loadGoals();
 
         } catch (error: any) {
-          console.error('Erro ao atualizar meta:', error);
+          console.error('❌ Erro ao atualizar meta:', error);
           set({ isLoading: false, error: error.message || 'Falha ao atualizar meta.' });
         } finally {
           set({ isLoading: false });
