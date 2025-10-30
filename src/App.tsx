@@ -16,6 +16,8 @@ import Relatorios from "./pages/Relatorios";
 import NotFound from "./pages/NotFound";
 import VoiceAgent from "./pages/VoiceAgent";
 import Login from "./pages/Login";
+import AuthCallback from '@/pages/auth/callback';
+import ResetPassword from '@/pages/auth/reset-password';
 import { useFinanceStore } from "./store/useFinanceStore";
 import { supabase } from "./lib/supabase";
 import { GoalToastProvider } from '@/components/GoalToastProvider';
@@ -203,6 +205,10 @@ const App = () => {
             <Routes>
               {/* Login route - accessible whether logged in or not */}
               <Route path="/login" element={<Login />} />
+              
+              {/* Auth routes */}
+              <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/auth/reset-password" element={<ResetPassword />} />
               
               {/* Protected routes */}
               <Route 

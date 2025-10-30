@@ -82,22 +82,28 @@ const Login: React.FC = () => {
     }
 
     try {
+      // ✅ CORRIGIR: Adicionar emailRedirectTo
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: email.trim(),
         password,
         options: {
           data: {
             name: name.trim()
           },
+          // ✅ CRÍTICO: Redireciona para callback após confirmar email
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         }
       });
 
       if (error) {
         toast.error(error.message || "Erro ao criar conta");
+        console.error("Signup error:", error);
       } else {
-        toast.success("Conta criada! Verifique seu e-mail para confirmação.");
+        toast.success("✅ Conta criada! Verifique seu e-mail para confirmação.");
         setMode("login");
+        setEmail("");
+        setPassword("");
+        setName("");
       }
     } catch (err: any) {
       console.error("Register error:", err);
@@ -119,16 +125,18 @@ const Login: React.FC = () => {
     }
 
     try {
-      // ✅ CORRIGIR AQUI - Adicionar redirectTo
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      // ✅ CORRIGIR: Adicionar redirectTo
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
         redirectTo: `${window.location.origin}/auth/reset-password`,
       });
 
       if (error) {
         toast.error(error.message || "Erro ao enviar email de recuperação");
+        console.error("Reset password error:", error);
       } else {
-        toast.success("Email de recuperação enviado! Verifique sua caixa de entrada.");
+        toast.success("✅ Email de recuperação enviado! Verifique sua caixa de entrada.");
         setMode("login");
+        setEmail("");
       }
     } catch (err: any) {
       console.error("Forgot password error:", err);
