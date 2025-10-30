@@ -75,7 +75,6 @@ const Login: React.FC = () => {
 
     if (!isSupabaseConfigured) {
       toast.success("Modo desenvolvimento: conta criada (simulada)");
-      // For convenience in offline mode, automatically sign-in after register simulation
       notifyDemoAuth();
       setLoading(false);
       navigate("/", { replace: true });
@@ -89,12 +88,13 @@ const Login: React.FC = () => {
         options: {
           data: {
             name: name.trim()
-          }
+          },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         }
       });
 
       if (error) {
-        toast.error(error.message);
+        toast.error(error.message || "Erro ao criar conta");
       } else {
         toast.success("Conta criada! Verifique seu e-mail para confirmação.");
         setMode("login");
@@ -119,8 +119,9 @@ const Login: React.FC = () => {
     }
 
     try {
+      // ✅ CORRIGIR AQUI - Adicionar redirectTo
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + "/login",
+        redirectTo: `${window.location.origin}/auth/reset-password`,
       });
 
       if (error) {

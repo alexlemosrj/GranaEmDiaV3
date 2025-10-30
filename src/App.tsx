@@ -120,6 +120,7 @@ const App = () => {
           
           setSession(session);
           
+          // ✅ ISTO VAI CAPTURAR O CALLBACK
           if (event === 'SIGNED_IN' && session?.user) {
             console.log(`User authenticated: ${session.user.id}`);
             syncWithSupabase().catch(err => {

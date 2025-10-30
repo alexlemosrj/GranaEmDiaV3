@@ -17,12 +17,12 @@ export const supabase = createClient(
     auth: {
       // Armazenar sessão no localStorage para persistência
       storage: window.localStorage,
-      // Auto-refresh de token habilitado
+      // ✅ CRÍTICO: Auto-detect de sessão na URL
       autoRefreshToken: true,
       // Persistir sessão entre reloads
       persistSession: true,
       // Detectar mudanças de sessão em outras abas
-      detectSessionInUrl: true,
+      detectSessionInUrl: true,  // ← ISTO DETECTA O CALLBACK
     },
     // Configurações de realtime
     realtime: {
